@@ -1,3 +1,14 @@
+---
+title: TextSnap
+emoji: 📄
+colorFrom: indigo
+colorTo: purple
+sdk: docker
+app_port: 5173
+pinned: false
+short_description: Free OCR, PDF, Word and Excel converter tools
+---
+
 # TextSnap — Free Online File Tools
 
 A multi-tool website: OCR, PDF, Office, image and QR tools. Most tools run fully in the browser (files never leave the device).
@@ -27,6 +38,9 @@ Open http://localhost:5173
 - **Chrome or Chromium** (Text/HTML → PDF): found automatically if installed.
 - **LibreOffice** (Word/Excel/PPT → PDF and → JPG): install from libreoffice.org (Windows: `winget install TheDocumentFoundation.LibreOffice`).
 Tools whose program is missing show a clear "not available" message; everything else keeps working.
+
+### Deploy online
+Step-by-step guide for Railway or your own server: **[DEPLOY.md](DEPLOY.md)**.
 
 ### Deploy with Docker (includes Chromium, LibreOffice and Bengali/Asian fonts)
 ```

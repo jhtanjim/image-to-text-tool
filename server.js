@@ -62,7 +62,17 @@ function makeLimiter(perHour) {
 const rateLimited = makeLimiter(AI_LIMIT_PER_HOUR);
 const CONVERT_LIMIT_PER_HOUR = Number(process.env.CONVERT_LIMIT_PER_HOUR || 120);
 const convertLimited = makeLimiter(CONVERT_LIMIT_PER_HOUR);
-const clientIp = (req) => req.headers['x-forwarded-for']?.split(',')[0].trim() || req.socket.remoteAddress;
+// Visitor IP for rate limits. Behind a hosting proxy (Railway, Render, nginx…) set TRUST_PROXY=1:
+// the proxy appends the real client IP as the LAST X-Forwarded-For entry. Earlier entries come from the
+// visitor and can be faked, so they are never used. Without TRUST_PROXY the header is ignored entirely.
+const TRUST_PROXY = process.env.TRUST_PROXY === '1';
+const clientIp = (req) => {
+  if (TRUST_PROXY) {
+    const xff = String(req.headers['x-forwarded-for'] || '').split(',').map((s) => s.trim()).filter(Boolean);
+    if (xff.length) return xff[xff.length - 1];
+  }
+  return req.socket.remoteAddress;
+};
 
 function sendJson(res, status, obj) {
   res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8' });
@@ -257,6 +267,7 @@ function serveGet(req, res) {
 
 http.createServer((req, res) => {
   const url = req.url.split('?')[0];
+  if (url === '/healthz') return sendJson(res, 200, { ok: true }); // for the hosting platform's health check
   if (url === '/api/config' && req.method === 'GET') return sendJson(res, 200, { ai: AI_ENABLED, limitPerHour: AI_LIMIT_PER_HOUR });
   if (url === '/api/ocr-ai' && req.method === 'POST') return handleAiOcr(req, res);
   if (url === '/api/ai/extract' && req.method === 'POST') return handleAiExtract(req, res, new URL(req.url, 'http://x').searchParams);
