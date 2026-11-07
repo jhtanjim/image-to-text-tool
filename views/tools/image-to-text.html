@@ -1,0 +1,93 @@
+    <section class="tool card">
+      <div id="dropzone" class="dropzone" tabindex="0" role="button" aria-label="Upload images">
+        <div class="dz-icon">⬆</div>
+        <p class="dz-title">Drop, upload or paste images</p>
+        <p class="dz-sub">JPG, PNG, WEBP, BMP, GIF · up to 20 images · max 10 MB each</p>
+        <button type="button" id="browseBtn" class="btn primary">Browse files</button>
+        <input type="file" id="fileInput" accept="image/*" multiple hidden />
+      </div>
+
+      <form id="urlForm" class="url-row">
+        <input type="url" id="urlInput" placeholder="…or paste an image URL (https://…)" />
+        <button type="submit" class="btn">Add URL</button>
+      </form>
+
+      <div class="modes" role="radiogroup" aria-label="Conversion mode">
+        <label class="mode">
+          <input type="radio" name="mode" value="fast" checked />
+          <span><b>Fast</b><small>Free · runs in your browser · good for clear printed text</small></span>
+        </label>
+        <label class="mode" id="aiModeLabel">
+          <input type="radio" name="mode" value="ai" />
+          <span><b>AI high accuracy ✨</b><small id="aiModeNote">Faded text, handwriting, tables · any language detected automatically</small></span>
+        </label>
+      </div>
+
+      <div class="options" id="fastOptions">
+        <label>
+          Language
+          <select id="langSelect">
+            <option value="auto" selected>Auto-detect (recommended)</option>
+            <option value="eng+ben">English + Bengali</option>
+            <option value="eng">English only</option>
+            <option value="ben">Bengali only (বাংলা)</option>
+            <option value="ara">Arabic</option>
+            <option value="hin">Hindi</option>
+            <option value="urd">Urdu</option>
+            <option value="spa">Spanish</option>
+            <option value="fra">French</option>
+            <option value="deu">German</option>
+            <option value="ita">Italian</option>
+            <option value="por">Portuguese</option>
+            <option value="rus">Russian</option>
+            <option value="tur">Turkish</option>
+            <option value="chi_sim">Chinese (Simplified)</option>
+            <option value="jpn">Japanese</option>
+            <option value="kor">Korean</option>
+          </select>
+        </label>
+        <label class="check">
+          <input type="checkbox" id="enhance" checked />
+          Auto-enhance difficult images (photos, low contrast)
+        </label>
+      </div>
+
+      <div class="actions">
+        <button id="convertBtn" class="btn primary big" disabled>Convert</button>
+        <button id="clearBtn" class="btn ghost" disabled>Clear all</button>
+      </div>
+
+      <p id="status" class="status" role="status" aria-live="polite"></p>
+    </section>
+
+    <section id="results" class="results"></section>
+
+    <div id="bulkBar" class="bulk card" hidden>
+      <span id="bulkCount"></span>
+      <div>
+        <button id="copyAllBtn" class="btn">Copy all</button>
+        <button id="downloadAllDocxBtn" class="btn">Download all (.docx)</button>
+        <button id="downloadAllBtn" class="btn primary">Download all (.txt)</button>
+      </div>
+    </div>
+
+    <template id="resultTpl">
+      <article class="result card">
+        <div class="result-head">
+          <img class="thumb" alt="" />
+          <div class="meta">
+            <div class="name"></div>
+            <div class="state"></div>
+            <div class="bar"><span></span></div>
+          </div>
+          <button class="icon-btn remove" title="Remove" aria-label="Remove">✕</button>
+        </div>
+        <textarea class="text" placeholder="Extracted text will appear here…" spellcheck="false"></textarea>
+        <div class="result-actions">
+          <span class="stats"></span>
+          <button class="btn copy" disabled>Copy</button>
+          <button class="btn docx" disabled>Download .docx</button>
+          <button class="btn download" disabled>Download .txt</button>
+        </div>
+      </article>
+    </template>
