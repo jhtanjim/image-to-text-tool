@@ -5,6 +5,9 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import Anthropic from '@anthropic-ai/sdk';
+import { renderPage } from './render.js';
+import { textToPdf, htmlToPdf, officeToPdf, ConvertError, CHROME_PATH, sofficePath, mimeFor } from './convert.js';
+import { AI_TASKS, buildRequest } from './ai-tasks.js';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 try { process.loadEnvFile(path.join(ROOT, '.env')); } catch { /* no .env file — use real env vars */ }
@@ -25,44 +28,93 @@ const SYSTEM_PROMPT = `You are a precise OCR engine. Transcribe ALL text visible
 
 const TYPES = {
   '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=utf-8',
-  '.js': 'text/javascript; charset=utf-8', '.png': 'image/png', '.jpg': 'image/jpeg',
-  '.svg': 'image/svg+xml', '.ico': 'image/x-icon',
+  '.js': 'text/javascript; charset=utf-8', '.mjs': 'text/javascript; charset=utf-8',
+  '.bcmap': 'application/octet-stream', '.pfb': 'application/octet-stream', '.ttf': 'font/ttf',
+  '.png': 'image/png', '.jpg': 'image/jpeg', '.svg': 'image/svg+xml', '.ico': 'image/x-icon',
 };
 const ALLOWED_IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif']);
-const PUBLIC_FILES = new Set(['/index.html', '/style.css', '/app.js']);
+const PUBLIC_DIR = path.join(ROOT, 'public');
+const VIEWS_DIR = path.join(ROOT, 'views');
+// Browser builds of npm libraries, served from node_modules (only these exact files are exposed).
+const VENDOR = {
+  'pdf.mjs': 'pdfjs-dist/build/pdf.min.mjs',
+  'pdf.worker.mjs': 'pdfjs-dist/build/pdf.worker.min.mjs',
+  'pdf-lib.js': 'pdf-lib/dist/pdf-lib.min.js',
+  'fontkit.js': '@pdf-lib/fontkit/dist/fontkit.umd.min.js',
+  'jszip.js': 'jszip/dist/jszip.min.js',
+  'zxing.js': '@zxing/library/umd/index.min.js',
+  'exceljs.js': 'exceljs/dist/exceljs.min.js',
+  'papaparse.js': 'papaparse/papaparse.min.js',
+  'docx.js': 'docx/dist/index.iife.js',
+};
 
-// ---- very small in-memory rate limiter (protects your API bill) ----
-const hits = new Map(); // ip -> [timestamps]
-function rateLimited(ip) {
-  const now = Date.now(), hour = 3600_000;
-  const list = (hits.get(ip) || []).filter((t) => now - t < hour);
-  if (list.length >= AI_LIMIT_PER_HOUR) { hits.set(ip, list); return true; }
-  list.push(now); hits.set(ip, list);
-  return false;
+// ---- very small in-memory rate limiters (protect your API bill and server CPU) ----
+function makeLimiter(perHour) {
+  const hits = new Map(); // ip -> [timestamps]
+  return (ip) => {
+    const now = Date.now(), hour = 3600_000;
+    const list = (hits.get(ip) || []).filter((t) => now - t < hour);
+    if (list.length >= perHour) { hits.set(ip, list); return true; }
+    list.push(now); hits.set(ip, list);
+    return false;
+  };
 }
+const rateLimited = makeLimiter(AI_LIMIT_PER_HOUR);
+const CONVERT_LIMIT_PER_HOUR = Number(process.env.CONVERT_LIMIT_PER_HOUR || 120);
+const convertLimited = makeLimiter(CONVERT_LIMIT_PER_HOUR);
+const clientIp = (req) => req.headers['x-forwarded-for']?.split(',')[0].trim() || req.socket.remoteAddress;
 
 function sendJson(res, status, obj) {
   res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8' });
   res.end(JSON.stringify(obj));
 }
 
-function readBody(req) {
+function readBody(req, { limit = MAX_BODY, raw = false } = {}) {
   return new Promise((resolve, reject) => {
     let size = 0; const chunks = [];
     req.on('data', (c) => {
       size += c.length;
-      if (size > MAX_BODY) { reject(Object.assign(new Error('Image too large'), { status: 413 })); req.destroy(); return; }
+      if (size > limit) { reject(Object.assign(new Error(`File too large (max ${Math.round(limit / 1048576)} MB)`), { status: 413 })); req.destroy(); return; }
       chunks.push(c);
     });
-    req.on('end', () => resolve(Buffer.concat(chunks).toString('utf8')));
+    req.on('end', () => { const buf = Buffer.concat(chunks); resolve(raw ? buf : buf.toString('utf8')); });
     req.on('error', reject);
   });
 }
 
+// ---- Document conversion endpoints (Chromium + LibreOffice) ----
+async function handleConvert(req, res, kind, query) {
+  if (convertLimited(clientIp(req))) return sendJson(res, 429, { error: `Limit reached (${CONVERT_LIMIT_PER_HOUR} conversions per hour). Please try again later.` });
+  try {
+    let out, name, to = 'pdf';
+    if (kind === 'text-pdf' || kind === 'html-pdf') {
+      const body = JSON.parse(await readBody(req, { limit: 12 * 1048576 }));
+      out = kind === 'text-pdf' ? await textToPdf(body) : await htmlToPdf(body);
+    } else if (kind === 'office') {
+      const fileName = decodeURIComponent(req.headers['x-file-name'] || '');
+      const buffer = await readBody(req, { limit: 50 * 1048576, raw: true });
+      to = query.get('to') === 'docx' ? 'docx' : 'pdf';
+      out = await officeToPdf({ buffer, fileName, kind: query.get('type'), onePagePerSheet: query.get('onePage') === '1', to });
+      name = fileName.replace(/\.[^.]+$/, '');
+    } else return sendJson(res, 404, { error: 'Unknown converter.' });
+    res.writeHead(200, {
+      'Content-Type': mimeFor(to),
+      'Content-Length': out.length,
+      ...(name ? { 'X-Output-Name': encodeURIComponent(`${name}.${to}`) } : {}),
+    });
+    res.end(out);
+  } catch (err) {
+    if (err instanceof ConvertError) return sendJson(res, err.status, { error: err.message });
+    if (err.status === 413) return sendJson(res, 413, { error: err.message });
+    if (err instanceof SyntaxError) return sendJson(res, 400, { error: 'Invalid request.' });
+    console.error('Conversion failed:', err);
+    return sendJson(res, 500, { error: 'Conversion failed. Please try again.' });
+  }
+}
+
 async function handleAiOcr(req, res) {
   if (!AI_ENABLED) return sendJson(res, 503, { error: 'AI mode is not set up on this server (missing ANTHROPIC_API_KEY).' });
-  const ip = req.headers['x-forwarded-for']?.split(',')[0].trim() || req.socket.remoteAddress;
-  if (rateLimited(ip)) return sendJson(res, 429, { error: `AI limit reached (${AI_LIMIT_PER_HOUR} images per hour). Try again later or use Fast mode.` });
+  if (rateLimited(clientIp(req))) return sendJson(res, 429, { error: `AI limit reached (${AI_LIMIT_PER_HOUR} images per hour). Try again later or use Fast mode.` });
 
   let payload;
   try { payload = JSON.parse(await readBody(req)); }
@@ -119,24 +171,103 @@ async function handleAiOcr(req, res) {
   }
 }
 
-function serveStatic(req, res) {
-  let p = decodeURIComponent(req.url.split('?')[0]);
-  if (p === '/') p = '/index.html';
-  if (!PUBLIC_FILES.has(p)) { res.writeHead(404); return res.end('Not found'); } // never serve .env, server.js, node_modules
-  fs.readFile(path.join(ROOT, p), (err, data) => {
-    if (err) { res.writeHead(404); return res.end('Not found'); }
-    res.writeHead(200, { 'Content-Type': TYPES[path.extname(p)] || 'application/octet-stream' });
+// ---- AI extraction: PDF/image → structured JSON (document blocks, tables, bank transactions, translation) ----
+const AI_FILE_TYPES = new Set(['application/pdf', 'image/jpeg', 'image/png', 'image/webp', 'image/gif']);
+async function handleAiExtract(req, res, query) {
+  if (!AI_ENABLED) return sendJson(res, 503, { error: 'AI tools are not set up on this server yet (missing ANTHROPIC_API_KEY).' });
+  const task = query.get('task');
+  if (!AI_TASKS.includes(task)) return sendJson(res, 400, { error: 'Unknown AI task.' });
+  const mediaType = String(req.headers['content-type'] || '').split(';')[0].trim();
+  if (!AI_FILE_TYPES.has(mediaType)) return sendJson(res, 400, { error: 'Please upload a PDF or an image (JPG, PNG, WEBP, GIF).' });
+  if (rateLimited(clientIp(req))) return sendJson(res, 429, { error: `AI limit reached (${AI_LIMIT_PER_HOUR} files per hour). Please try again later.` });
+
+  let request;
+  try {
+    const buf = await readBody(req, { limit: 24 * 1048576, raw: true }); // base64 grows ~33%; API request limit is 32 MB
+    if (!buf.length) return sendJson(res, 400, { error: 'The file is empty.' });
+    request = buildRequest({ task, data: buf.toString('base64'), mediaType, target: query.get('target'), model: MODEL });
+  } catch (e) { return sendJson(res, e.status || 400, { error: e.message }); }
+
+  try {
+    // Stream so large outputs (long statements, many pages) don't hit HTTP timeouts.
+    const message = await client.beta.messages.stream(request).finalMessage();
+    if (message.stop_reason === 'refusal') return sendJson(res, 422, { error: 'The AI declined to process this file.' });
+    if (message.stop_reason === 'max_tokens') return sendJson(res, 413, { error: 'This file has too much content to process at once. Try splitting it into smaller parts.' });
+    const text = message.content.filter((b) => b.type === 'text').map((b) => b.text).join('');
+    let data;
+    try { data = JSON.parse(text); } catch { return sendJson(res, 502, { error: 'The AI returned an unexpected answer. Please try again.' }); }
+    return sendJson(res, 200, { data, usage: { input: message.usage.input_tokens, output: message.usage.output_tokens } });
+  } catch (err) {
+    if (err instanceof Anthropic.AuthenticationError) {
+      console.error('Anthropic auth failed: check ANTHROPIC_API_KEY');
+      return sendJson(res, 500, { error: 'AI service is misconfigured (invalid API key).' });
+    }
+    if (err instanceof Anthropic.RateLimitError) return sendJson(res, 429, { error: 'AI service is busy. Please try again in a minute.' });
+    if (err instanceof Anthropic.BadRequestError) {
+      console.error('Bad request:', err.message);
+      return sendJson(res, 400, { error: 'The AI could not read this file (too many pages, password-protected or unsupported).' });
+    }
+    if (err instanceof Anthropic.APIError) {
+      console.error(`Anthropic API error ${err.status}:`, err.message);
+      return sendJson(res, 502, { error: 'AI service error. Please try again.' });
+    }
+    console.error(err);
+    return sendJson(res, 500, { error: 'Unexpected server error.' });
+  }
+}
+
+function sendFile(res, file, cache) {
+  fs.readFile(file, (err, data) => {
+    if (err) { res.writeHead(404, { 'Content-Type': 'text/plain' }); return res.end('Not found'); }
+    res.writeHead(200, {
+      'Content-Type': TYPES[path.extname(file)] || 'application/octet-stream',
+      ...(cache ? { 'Cache-Control': 'public, max-age=604800' } : {}),
+    });
     res.end(data);
   });
+}
+
+function serveGet(req, res) {
+  let p;
+  try { p = decodeURIComponent(req.url.split('?')[0]); } catch { res.writeHead(400); return res.end(); }
+
+  // Pages: "/" is Image to Text, "/<tool-slug>" is any tool
+  const slug = p === '/' ? 'image-to-text' : p.slice(1).replace(/\/$/, '');
+  if (/^[a-z0-9-]+$/.test(slug)) {
+    const html = renderPage(slug, VIEWS_DIR);
+    if (html) { res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' }); return res.end(html); }
+  }
+
+  // Vendor libraries (whitelisted files only)
+  if (p.startsWith('/vendor/')) {
+    const rel = VENDOR[p.slice(8)];
+    if (rel) return sendFile(res, path.join(ROOT, 'node_modules', rel), true);
+    // pdf.js character maps + standard fonts (needed to render some PDFs correctly)
+    const m = p.match(/^\/vendor\/(cmaps|standard_fonts)\/([\w.-]+)$/);
+    if (m) return sendFile(res, path.join(ROOT, 'node_modules', 'pdfjs-dist', m[1], m[2]), true);
+  }
+
+  // Static files from /public only (never .env, server code or node_modules)
+  const file = path.normalize(path.join(PUBLIC_DIR, p));
+  if (file.startsWith(PUBLIC_DIR + path.sep) && !p.split('/').some((seg) => seg.startsWith('.'))) {
+    return sendFile(res, file, false);
+  }
+  res.writeHead(404, { 'Content-Type': 'text/plain' }); res.end('Not found');
 }
 
 http.createServer((req, res) => {
   const url = req.url.split('?')[0];
   if (url === '/api/config' && req.method === 'GET') return sendJson(res, 200, { ai: AI_ENABLED, limitPerHour: AI_LIMIT_PER_HOUR });
   if (url === '/api/ocr-ai' && req.method === 'POST') return handleAiOcr(req, res);
-  if (req.method === 'GET') return serveStatic(req, res);
+  if (url === '/api/ai/extract' && req.method === 'POST') return handleAiExtract(req, res, new URL(req.url, 'http://x').searchParams);
+  if (url === '/api/convert/status' && req.method === 'GET') return sendJson(res, 200, { pdf: Boolean(CHROME_PATH), office: Boolean(sofficePath()) });
+  const conv = url.match(/^\/api\/convert\/(text-pdf|html-pdf|office)$/);
+  if (conv && req.method === 'POST') return handleConvert(req, res, conv[1], new URL(req.url, 'http://x').searchParams);
+  if (req.method === 'GET') return serveGet(req, res);
   res.writeHead(405); res.end();
 }).listen(PORT, () => {
   console.log(`TextSnap running at http://localhost:${PORT}`);
   console.log(AI_ENABLED ? `AI mode ON (model: ${MODEL})` : 'AI mode OFF: add ANTHROPIC_API_KEY to .env to enable it');
+  console.log(CHROME_PATH ? `PDF engine: ${CHROME_PATH}` : 'PDF engine OFF: install Chrome/Chromium or set CHROME_PATH');
+  console.log(sofficePath() ? `Office engine: ${sofficePath()}` : 'Office engine OFF: install LibreOffice or set SOFFICE_PATH');
 });

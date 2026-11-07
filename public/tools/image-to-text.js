@@ -200,6 +200,8 @@
     el.querySelector('.remove').addEventListener('click', () => removeItem(item));
     el.querySelector('.copy').addEventListener('click', (e) => copyText(item.text, e.currentTarget));
     el.querySelector('.download').addEventListener('click', () => downloadText(item.text, baseName(item.name) + '.txt'));
+    el.querySelector('.docx').addEventListener('click', async () =>
+      downloadBlob(await makeDocx([{ title: item.name, text: item.text }]), baseName(item.name) + '.docx'));
     resultsEl.appendChild(el);
     return el;
   }
@@ -229,6 +231,7 @@
     const has = t.length > 0;
     item.el.querySelector('.copy').disabled = !has;
     item.el.querySelector('.download').disabled = !has;
+    item.el.querySelector('.docx').disabled = !has;
   }
 
   // ---------- Automatic language detection ----------
@@ -299,10 +302,15 @@
               !item.text ? 'Done · no text found' : data.truncated ? 'Done (AI) · text was very long and got cut off' : 'Done · AI high accuracy', 1);
             continue;
           }
-          const input = enhanceBox.checked ? await preprocess(item.blob) : item.blob;
-          const result = lang === 'auto'
-            ? await recognizeAuto(input, item)
-            : await recognizeWith(lang, input);
+          // Read the original first. Enhancement helps noisy photos but can hurt clean screenshots,
+          // so only try it when the first read isn't confident, and keep whichever result scores higher.
+          const read = (img) => (lang === 'auto' ? recognizeAuto(img, item) : recognizeWith(lang, img));
+          let result = await read(item.blob);
+          if (enhanceBox.checked && result.confidence < 85) {
+            setItemState(item, 'working', 'Enhancing the image for a second read…', 0.5);
+            const enhanced = await read(await preprocess(item.blob));
+            if (enhanced.confidence > result.confidence) result = enhanced;
+          }
           item.text = result.text;
           item.el.querySelector('.text').value = item.text;
           updateStats(item);
@@ -423,16 +431,39 @@
 
   $('#copyAllBtn').addEventListener('click', (e) => copyText(allText(), e.currentTarget));
   $('#downloadAllBtn').addEventListener('click', () => downloadText(allText(), 'textsnap-results.txt'));
-
-  // Theme toggle (remembered per browser)
-  const root = document.documentElement;
-  try { const t = localStorage.getItem('theme'); if (t) root.dataset.theme = t; } catch {}
-  $('#themeToggle').addEventListener('click', () => {
-    const dark = root.dataset.theme ? root.dataset.theme === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches;
-    root.dataset.theme = dark ? 'light' : 'dark';
-    try { localStorage.setItem('theme', root.dataset.theme); } catch {}
+  $('#downloadAllDocxBtn').addEventListener('click', async () => {
+    const done = items.filter((i) => i.text);
+    downloadBlob(await makeDocx(done.map((i) => ({ title: i.name, text: i.text }))), 'textsnap-results.docx');
   });
 
-  $('#year').textContent = new Date().getFullYear();
+  // ---------- Word (.docx) export ----------
+  // Bengali/Hindi/Arabic are "complex scripts" in Word, so set a font for them (cs) as well as Latin text.
+  const DOCX_FONT = { ascii: 'Calibri', hAnsi: 'Calibri', cs: 'Nirmala UI', eastAsia: 'Microsoft YaHei' };
+  async function makeDocx(sections) {
+    const { Document, Packer, Paragraph, TextRun, HeadingLevel } = window.docx;
+    const children = [];
+    sections.forEach((s, idx) => {
+      if (sections.length > 1) children.push(new Paragraph({ text: s.title, heading: HeadingLevel.HEADING_2, pageBreakBefore: idx > 0 }));
+      for (const line of s.text.split('\n')) {
+        children.push(new Paragraph({ children: [new TextRun({ text: line, font: DOCX_FONT, size: 24 })] }));
+      }
+    });
+    return Packer.toBlob(new Document({ sections: [{ children }] }));
+  }
+  function downloadBlob(blob, filename) {
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = filename;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  }
+
+  // JPG to Word page: make the Word download the main button
+  if (document.body.dataset.wordFirst) {
+    tpl.content.querySelector('.docx').classList.add('primary');
+    $('#downloadAllDocxBtn').classList.add('primary');
+    $('#downloadAllBtn').classList.remove('primary');
+  }
+
   loadConfig();
 })();
