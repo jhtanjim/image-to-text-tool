@@ -8,6 +8,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import { renderPage } from './render.js';
 import { textToPdf, htmlToPdf, officeToPdf, ConvertError, CHROME_PATH, sofficePath, mimeFor } from './convert.js';
 import { AI_TASKS, buildRequest } from './ai-tasks.js';
+import { VENDOR } from './vendor.js';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 try { process.loadEnvFile(path.join(ROOT, '.env')); } catch { /* no .env file — use real env vars */ }
@@ -35,18 +36,6 @@ const TYPES = {
 const ALLOWED_IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif']);
 const PUBLIC_DIR = path.join(ROOT, 'public');
 const VIEWS_DIR = path.join(ROOT, 'views');
-// Browser builds of npm libraries, served from node_modules (only these exact files are exposed).
-const VENDOR = {
-  'pdf.mjs': 'pdfjs-dist/build/pdf.min.mjs',
-  'pdf.worker.mjs': 'pdfjs-dist/build/pdf.worker.min.mjs',
-  'pdf-lib.js': 'pdf-lib/dist/pdf-lib.min.js',
-  'fontkit.js': '@pdf-lib/fontkit/dist/fontkit.umd.min.js',
-  'jszip.js': 'jszip/dist/jszip.min.js',
-  'zxing.js': '@zxing/library/umd/index.min.js',
-  'exceljs.js': 'exceljs/dist/exceljs.min.js',
-  'papaparse.js': 'papaparse/papaparse.min.js',
-  'docx.js': 'docx/dist/index.iife.js',
-};
 
 // ---- very small in-memory rate limiters (protect your API bill and server CPU) ----
 function makeLimiter(perHour) {

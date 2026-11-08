@@ -2,7 +2,26 @@
 
 The site runs as one Docker container (Node + Chromium + LibreOffice + fonts). Any host that runs a Dockerfile works.
 
-## Free: Hugging Face Spaces (recommended to start)
+## Free & fastest: Vercel (static version, 17 tools)
+Vercel serves the **static version** of the site: all browser tools work (Image to Text, PDF to JPG, Merge PDF,
+Image to PDF, QR, CSV/Excel, Word to Excel…). Tools that need the server (Office → PDF, Text/HTML → PDF, AI tools)
+show "Coming soon". The build is configured in `vercel.json` (`npm run build:static` → `dist/`).
+
+1. Go to **vercel.com** → **Sign up** → **Continue with GitHub**.
+2. **Add New… → Project →** import `image-to-text-tool`
+   (allow Vercel to access this repo when asked).
+3. Leave every setting as it is (Vercel reads `vercel.json`) → **Deploy**. It takes about 1 minute.
+4. You get an address like `image-to-text-tool.vercel.app`. Every push to `main` redeploys automatically.
+5. *(Optional)* **Settings → Domains** to add your own domain.
+
+> ⚠️ Vercel's free **Hobby plan is for non-commercial use only**: no ads on it.
+> When you're ready for AdSense, deploy the same build to **Cloudflare Pages** (free, commercial use allowed):
+> Workers & Pages → Create → Pages → Connect to Git → pick the repo →
+> Build command `npm run build:static`, Output directory `dist` → Save and Deploy.
+
+To try the static version on your own computer: `npm run build:static`, then open the `dist/` folder with any static server.
+
+## Free: Hugging Face Spaces (all 30 tools)
 Free forever, no credit card, 2 CPUs and 16 GB RAM, so every tool works.
 Catch: the Space **sleeps after 48 hours without visitors**, and the next visit wakes it in about a minute.
 Your address will be `https://<your-username>-textsnap.hf.space`.
