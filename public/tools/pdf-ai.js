@@ -58,7 +58,7 @@ export default function mount(root, { mode }) {
   const word = mode === 'word';
   const status = statusLine();
   const modes = h(`<div class="modes">
-      <label class="mode" data-ai><input type="radio" name="how" value="ai" /><span><b>AI: editable ✨</b><small class="ai-note">${word ? 'Clean headings, paragraphs, lists and real Word tables. Reads scanned PDFs too.' : 'Clean, semantic HTML with headings, lists and tables. Reads scanned PDFs too.'}</small></span></label>
+      <label class="mode" data-ai><input type="radio" name="how" value="ai" /><span><b>AI: editable</b><small class="ai-note">${word ? 'Clean headings, paragraphs, lists and real Word tables. Reads scanned PDFs too.' : 'Clean, semantic HTML with headings, lists and tables. Reads scanned PDFs too.'}</small></span></label>
       <label class="mode"><input type="radio" name="how" value="plain" checked /><span><b>${word ? 'Exact layout' : 'Simple'} (no AI)</b><small>${word ? 'Looks like the original page. Best for forms and designed pages.' : 'Paragraphs from the PDF text layer. Free and instant.'}</small></span></label>
     </div>`);
   const actions = h(`<div class="actions"><button class="btn primary big" disabled>Convert to ${word ? 'Word' : 'HTML'}</button></div>`);

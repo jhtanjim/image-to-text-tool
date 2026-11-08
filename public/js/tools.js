@@ -170,4 +170,23 @@ export const TOOLS = [
 
 export const NAV = ['image-to-text', 'jpg-to-word', 'pdf-to-jpg', 'merge-pdf', 'image-to-pdf'];
 
+// Tool groups for the menu, the tools section and the footer
+export const CATEGORIES = [
+  { id: 'ocr', name: 'Image to Text', slugs: ['image-to-text', 'batch-image-to-text', 'jpg-to-word', 'image-translator', 'jpg-to-excel'] },
+  { id: 'pdf', name: 'PDF Tools', slugs: ['merge-pdf', 'pdf-to-jpg', 'image-to-pdf', 'pdf-to-text', 'pdf-to-word', 'pdf-to-excel', 'pdf-to-csv', 'pdf-to-html', 'text-to-pdf', 'html-to-pdf'] },
+  { id: 'office', name: 'Word & Excel', slugs: ['word-to-pdf', 'excel-to-pdf', 'ppt-to-pdf', 'word-to-jpg', 'excel-to-jpg', 'word-to-excel', 'text-to-word', 'csv-to-excel', 'excel-to-csv', 'bank-statement-converter'] },
+  { id: 'image', name: 'Image & QR', slugs: ['qr-code-generator', 'qr-code-scanner', 'barcode-scanner', 'invert-image', 'text-to-image'] },
+];
+export const categoryOf = (slug) => CATEGORIES.find((c) => c.slugs.includes(slug));
+
+// Tools whose files are processed on the server (Chromium, LibreOffice or AI); everything else runs in the browser
+export const SERVER_TOOLS = new Set([
+  'text-to-pdf', 'html-to-pdf', 'word-to-pdf', 'excel-to-pdf', 'ppt-to-pdf', 'word-to-jpg', 'excel-to-jpg',
+  'pdf-to-word', 'pdf-to-excel', 'pdf-to-csv', 'jpg-to-excel', 'bank-statement-converter', 'image-translator',
+]);
+
+// One short line for tool cards: the first sentence of the description
+// (a sentence ends at . ! ? followed by a space or the end, so ".docx" or "e.g." mid-sentence don't cut it)
+export const shortDesc = (t) => (t.desc.match(/^.+?[.!?](?=\s+[A-Z]|$)/) || [t.desc])[0];
+
 export const getTool = (slug) => TOOLS.find((t) => t.slug === slug);

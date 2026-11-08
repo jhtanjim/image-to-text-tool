@@ -1,9 +1,9 @@
     <section class="tool card">
       <div id="dropzone" class="dropzone" tabindex="0" role="button" aria-label="Upload images">
-        <div class="dz-icon">⬆</div>
-        <p class="dz-title">Drop, upload or paste images</p>
-        <p class="dz-sub">JPG, PNG, WEBP, BMP, GIF · up to 20 images · max 10 MB each</p>
-        <button type="button" id="browseBtn" class="btn primary">Browse files</button>
+        <div class="dz-icon"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 16V4M7 9l5-5 5 5"/><path d="M20 16v2a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-2"/></svg></div>
+        <p class="dz-title">Drop your images here</p>
+        <p class="dz-sub">or paste a screenshot with Ctrl+V · JPG, PNG, WEBP · up to 20 images, 10 MB each</p>
+        <button type="button" id="browseBtn" class="btn primary">Choose images</button>
         <input type="file" id="fileInput" accept="image/*" multiple hidden />
       </div>
 
@@ -19,7 +19,7 @@
         </label>
         <label class="mode" id="aiModeLabel">
           <input type="radio" name="mode" value="ai" />
-          <span><b>AI high accuracy ✨</b><small id="aiModeNote">Faded text, handwriting, tables · any language detected automatically</small></span>
+          <span><b>AI high accuracy</b><small id="aiModeNote">Faded text, handwriting, tables · any language detected automatically</small></span>
         </label>
       </div>
 

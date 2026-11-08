@@ -1,5 +1,7 @@
 // Shared UI helpers for tool pages (ES module).
 
+export const UPLOAD_ICON = '<svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 16V4M7 9l5-5 5 5"/><path d="M20 16v2a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-2"/></svg>';
+
 export const h = (html) => {
   const t = document.createElement('template');
   t.innerHTML = html.trim();
@@ -47,10 +49,10 @@ export function statusLine() {
  */
 export function dropzone({ accept, multiple = true, title, sub, test, onFiles, paste = true, maxSizeMB = 50 }) {
   const el = h(`<div class="dropzone" tabindex="0" role="button">
-      <div class="dz-icon">⬆</div>
+      <div class="dz-icon">${UPLOAD_ICON}</div>
       <p class="dz-title">${esc(title)}</p>
       <p class="dz-sub">${esc(sub || '')}</p>
-      <button type="button" class="btn primary">Browse files</button>
+      <button type="button" class="btn primary">Choose ${multiple ? 'files' : 'file'}</button>
       <input type="file" hidden ${multiple ? 'multiple' : ''} accept="${esc(accept)}" />
     </div>`);
   const input = el.querySelector('input');

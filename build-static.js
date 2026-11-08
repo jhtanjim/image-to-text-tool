@@ -4,7 +4,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { TOOLS } from './public/js/tools.js';
+import { TOOLS, SERVER_TOOLS } from './public/js/tools.js';
 import { renderPage } from './render.js';
 import { VENDOR, VENDOR_DIRS } from './vendor.js';
 
@@ -13,10 +13,7 @@ const DIST = path.join(ROOT, 'dist');
 const NM = path.join(ROOT, 'node_modules');
 
 // Tools that cannot run without the Node server (Chromium, LibreOffice or the AI endpoint)
-export const NEEDS_SERVER = new Set([
-  'text-to-pdf', 'html-to-pdf', 'word-to-pdf', 'excel-to-pdf', 'ppt-to-pdf', 'word-to-jpg', 'excel-to-jpg', // Chrome / LibreOffice
-  'pdf-to-word', 'pdf-to-excel', 'pdf-to-csv', 'jpg-to-excel', 'bank-statement-converter', 'image-translator', // AI (or LibreOffice)
-]);
+const NEEDS_SERVER = SERVER_TOOLS;
 
 fs.rmSync(DIST, { recursive: true, force: true });
 fs.mkdirSync(DIST, { recursive: true });
