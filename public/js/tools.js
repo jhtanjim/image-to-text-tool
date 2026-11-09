@@ -136,6 +136,16 @@ export const TOOLS = [
     steps: ['Upload your statement (PDF or photo).', 'AI reads every transaction; balances are cross-checked.', 'Download Excel or CSV.'] },
 
   // ---------- Image ----------
+  { slug: 'resize-image', name: 'Resize Image', from: 'img', to: 'img', status: 'live',
+    title: 'Resize Image to Any Size (300×300, 300×80…)',
+    desc: 'Resize photos and signatures to exact pixels like 300×300 or 300×80, crop or add a background, and compress to a KB limit for job applications.',
+    script: 'resize-image.js', mode: 'resize',
+    steps: ['Upload your photo or signature.', 'Pick a size (e.g. Job photo 300×300 or Signature 300×80) or type your own.', 'Drag the photo to crop it, or choose Background to keep the whole image.', 'Set a max KB if needed and click Download.'] },
+  { slug: 'compress-image', name: 'Compress Image', from: 'img', to: 'img', status: 'live',
+    title: 'Compress Image to 50 KB, 100 KB or Any Size',
+    desc: 'Make a photo smaller in KB without changing its size in pixels. Keeps the best quality that fits your limit.',
+    script: 'resize-image.js', mode: 'compress',
+    steps: ['Upload your image.', 'Type the maximum size in KB (for example 50).', 'Click Download. The best quality under your limit is chosen automatically.'] },
   { slug: 'invert-image', name: 'Invert Image', from: 'img', to: 'img', status: 'live',
     title: 'Invert Image Colors',
     desc: 'Invert the colors of any image (negative effect). Works on many images at once.',
@@ -175,7 +185,7 @@ export const CATEGORIES = [
   { id: 'ocr', name: 'Image to Text', slugs: ['image-to-text', 'batch-image-to-text', 'jpg-to-word', 'image-translator', 'jpg-to-excel'] },
   { id: 'pdf', name: 'PDF Tools', slugs: ['merge-pdf', 'pdf-to-jpg', 'image-to-pdf', 'pdf-to-text', 'pdf-to-word', 'pdf-to-excel', 'pdf-to-csv', 'pdf-to-html', 'text-to-pdf', 'html-to-pdf'] },
   { id: 'office', name: 'Word & Excel', slugs: ['word-to-pdf', 'excel-to-pdf', 'ppt-to-pdf', 'word-to-jpg', 'excel-to-jpg', 'word-to-excel', 'text-to-word', 'csv-to-excel', 'excel-to-csv', 'bank-statement-converter'] },
-  { id: 'image', name: 'Image & QR', slugs: ['qr-code-generator', 'qr-code-scanner', 'barcode-scanner', 'invert-image', 'text-to-image'] },
+  { id: 'image', name: 'Image & QR', slugs: ['resize-image', 'compress-image', 'qr-code-generator', 'qr-code-scanner', 'barcode-scanner', 'invert-image', 'text-to-image'] },
 ];
 export const categoryOf = (slug) => CATEGORIES.find((c) => c.slugs.includes(slug));
 
