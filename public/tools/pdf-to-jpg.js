@@ -51,7 +51,7 @@ export default function mount(root) {
         canvas.width = Math.floor(viewport.width); canvas.height = Math.floor(viewport.height);
         const ctx = canvas.getContext('2d');
         ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, canvas.width, canvas.height); // JPG has no transparency
-        await page.render({ canvasContext: ctx, viewport }).promise;
+        await page.render({ canvasContext: ctx, viewport, intent: 'print' }).promise; // keeps working in background tabs
         const blob = await canvasToBlob(canvas, fmt === 'png' ? 'image/png' : 'image/jpeg', 0.92);
         const name = `${baseName(file.name)}-page-${String(n).padStart(String(doc.numPages).length, '0')}.${fmt}`;
         const url = URL.createObjectURL(blob);

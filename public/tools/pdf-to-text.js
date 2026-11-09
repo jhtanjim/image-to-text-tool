@@ -1,4 +1,4 @@
-import { h, dropzone, statusLine, download, copyText, openPdf, baseName, tests } from '/js/ui.js';
+import { h, dropzone, statusLine, download, copyText, openPdf, baseName, tests, bengaliTextBroken } from '/js/ui.js';
 
 // A page's text layer is "unusable" if it is (almost) empty, or full of private-use / replacement characters.
 // That happens with scanned PDFs and with old Bengali PDFs made with non-Unicode fonts (e.g. SutonnyMJ).
@@ -50,11 +50,12 @@ export default function mount(root) {
     },
   });
 
-  async function ocrPage(page, lang) {
+  let onProgress = null;
+  async function ocrPage(page, lang, label) {
     if (!worker || workerLang !== lang) {
       if (worker) await worker.terminate();
-      status.set('Loading OCR engine…');
-      worker = await Tesseract.createWorker(lang, 1);
+      status.set('Loading OCR engine… (first time only, a few seconds)');
+      worker = await Tesseract.createWorker(lang, 1, { logger: (m) => onProgress?.(m) });
       workerLang = lang;
     }
     const viewport = page.getViewport({ scale: 300 / 72 }); // 300 DPI for good OCR
@@ -62,9 +63,17 @@ export default function mount(root) {
     canvas.width = Math.floor(viewport.width); canvas.height = Math.floor(viewport.height);
     const ctx = canvas.getContext('2d');
     ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, canvas.width, canvas.height);
-    await page.render({ canvasContext: ctx, viewport }).promise;
+    // intent "print" doesn't wait for animation frames, so it keeps working while the tab is in the background
+    await page.render({ canvasContext: ctx, viewport, intent: 'print' }).promise;
+    onProgress = (m) => { if (m.status === 'recognizing text') status.set(`${label} Reading with OCR… ${Math.round(m.progress * 100)}%`); };
     const { data } = await worker.recognize(canvas);
-    return data.text.trim();
+    onProgress = null;
+    let text = data.text.trim();
+    if (lang.includes('ben')) {
+      const { repairBengali } = await import('/js/ocr.js');
+      text = (await repairBengali({ text: data.text, lines: data.lines || [], input: canvas }, (msg) => status.set(`${label} ${msg}`))).trim();
+    }
+    return text;
   }
 
   convertBtn.onclick = async () => {
@@ -80,11 +89,11 @@ export default function mount(root) {
         const page = await doc.getPage(n);
         const content = await page.getTextContent();
         let text = content.items.map((i) => (i.str ?? '') + (i.hasEOL ? '\n' : '')).join('').replace(/[ \t]+\n/g, '\n').trim();
-        const legacyPage = looksLikeLegacyBengali(text);
+        const legacyPage = looksLikeLegacyBengali(text) || bengaliTextBroken(text);
         legacy ||= legacyPage;
         if (forceOcr || textLooksBroken(text) || legacyPage) {
-          status.set(`Page ${n} of ${doc.numPages} is scanned or uses an old font. Reading it with OCR…`);
-          text = await ocrPage(page, lang);
+          status.set(`Page ${n} of ${doc.numPages}: reading with OCR…`);
+          text = await ocrPage(page, lang, `Page ${n} of ${doc.numPages}:`);
           ocrCount++;
         }
         parts.push(doc.numPages > 1 ? `--- Page ${n} ---\n${text}` : text);
@@ -94,7 +103,7 @@ export default function mount(root) {
       const words = ta.value.trim() ? ta.value.trim().split(/\s+/).length : 0;
       output.querySelector('.stats').textContent = `${doc.numPages} page(s) · ${words} words${ocrCount ? ` · ${ocrCount} page(s) read with OCR` : ''}`;
       output.hidden = false;
-      status.set(legacy ? 'Done. This PDF used an old (non-Unicode) Bengali font, so those pages were read with OCR.' : 'Done!');
+      status.set(legacy ? 'Done. The Bengali text inside this PDF was stored in a scrambled way, so those pages were read with OCR for correct spelling.' : 'Done!');
     } catch (err) {
       console.error(err);
       status.set(err.name === 'PasswordException' ? 'This PDF is password-protected.' : 'Could not read this PDF: ' + err.message, true);

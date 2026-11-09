@@ -252,7 +252,17 @@
     let text = data.text.trim();
     // Tesseract puts spaces between Chinese/Japanese characters; those languages don't use them.
     if (/chi_sim|jpn/.test(lang)) text = text.replace(/(?<=[぀-ヿ㐀-鿿＀-￯])[ \t]+(?=[぀-ヿ㐀-鿿＀-￯])/g, '');
-    return { text, confidence: Math.round(data.confidence), lang };
+    return { text, confidence: Math.round(data.confidence), lang, lines: data.lines || [], input };
+  }
+
+  // ---------- Bengali word repair (shared with PDF to Text, see /js/ocr.js) ----------
+  let ocrHelpers = null;
+  async function repairBengali(result, item) {
+    if (!result.lang.includes('ben') || !result.lines.length) return result;
+    ocrHelpers ||= import('/js/ocr.js'); // classic script: load the shared module on demand
+    const { repairBengali: repair } = await ocrHelpers;
+    const text = await repair(result, (msg) => setItemState(item, 'working', msg, 0.9));
+    return { ...result, text };
   }
 
   async function recognizeAuto(input, item) {
@@ -311,6 +321,7 @@
             const enhanced = await read(await preprocess(item.blob));
             if (enhanced.confidence > result.confidence) result = enhanced;
           }
+          result = await repairBengali(result, item);
           item.text = result.text;
           item.el.querySelector('.text').value = item.text;
           updateStats(item);

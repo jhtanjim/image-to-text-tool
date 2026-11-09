@@ -156,6 +156,19 @@ export function getPdfjs() {
   return pdfjsPromise;
 }
 
+/**
+ * True when a PDF's Bengali text layer is scrambled. Many PDFs store Bengali in visual order, so copying
+ * gives "আিম" instead of "আমি", or drop letters as \u0000. Those pages must be read with OCR instead.
+ * Signs: control characters, or the vowel signs ি ে ৈ appearing where no consonant is before them.
+ */
+export function bengaliTextBroken(text) {
+  const bn = (text.match(/[ঀ-৿]/g) || []).length;
+  if (bn < 15) return false;
+  if (/[\u0000-\u0008\u000E-\u001F]/.test(text)) return true;
+  const misplaced = (text.match(/(^|[^ক-হ়্ড়-য়ৰৱ])[িেৈ]/gm) || []).length;
+  return misplaced >= 2 || misplaced / bn > 0.02;
+}
+
 /** Open a PDF with pdf.js (with character maps + standard fonts for accurate text). */
 export async function openPdf(file) {
   const pdfjs = await getPdfjs();
@@ -207,7 +220,7 @@ export async function renderPdfPages(file, { dpi = 220, type = 'image/jpeg', qua
     canvas.width = Math.floor(viewport.width); canvas.height = Math.floor(viewport.height);
     const ctx = canvas.getContext('2d');
     ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, canvas.width, canvas.height);
-    await page.render({ canvasContext: ctx, viewport }).promise;
+    await page.render({ canvasContext: ctx, viewport, intent: 'print' }).promise; // keeps working in background tabs
     const blob = await canvasToBlob(canvas, type, quality);
     await onPage({ n, total: doc.numPages, blob, url: URL.createObjectURL(blob) });
     page.cleanup();

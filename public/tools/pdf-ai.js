@@ -1,4 +1,4 @@
-import { h, dropzone, statusLine, download, baseName, serverConvert, openPdf, engineStatus, tests } from '/js/ui.js';
+import { h, dropzone, statusLine, download, baseName, serverConvert, openPdf, engineStatus, tests, bengaliTextBroken } from '/js/ui.js';
 import { aiAvailable, aiExtract, blocksToDocx, blocksToHtml } from '/js/ai.js';
 
 // No-AI HTML from the PDF text layer.
@@ -12,6 +12,9 @@ async function simpleBlocks(file) {
   for (let n = 1; n <= doc.numPages; n++) {
     const page = await doc.getPage(n);
     const items = (await page.getTextContent()).items.filter((i) => i.str?.trim());
+    if (bengaliTextBroken(items.map((i) => i.str).join(' '))) {
+      throw new Error('This PDF stores its Bengali text in a scrambled way, so Simple mode would give wrong spelling. Use PDF to Text (it reads Bengali correctly with OCR), or AI mode.');
+    }
     // 1) group items into lines by their baseline (y), top to bottom
     const lines = [];
     for (const it of items) {
